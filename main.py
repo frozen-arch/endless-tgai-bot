@@ -45,7 +45,7 @@ INFO_IMAGE_PATH = Path("assets/info.jpg")
 
 # ========= Rate limits for groups =========
 GROUP_CMD_COOLDOWN = 2
-GROUP_USER_PER_MIN_LIMIT = 9999
+GROUP_USER_PER_MIN_LIMIT = 20
 
 # ========= Logging =========
 logging.basicConfig(level=logging.INFO)
@@ -569,6 +569,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_first_time_welcome(update, context)
 
     persona = get_persona(update.effective_user.id) or endless_system_prompt()
+    # Group vs DM behavior: short in groups, flexible in DMs
+    if is_group_chat(update):
+        persona += "\nKeep replies short and concise for group chats."
+    else:
+        persona += "\nYou may give detailed or short replies in DM depending on what the user wants."
+
     messages: List[dict] = [{"role": "system", "content": persona}]
     for m in get_history(update.effective_user.id, limit=8):
         messages.append({"role": m["role"], "content": m["content"]})
@@ -584,8 +590,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     reply = openai_chat(messages)
 
-    if is_group_chat(update) and isinstance(reply, str) and len(reply) > 400:
-        reply = reply[:380] + "…"
+    # No character truncation here (group replies are guided to be short via persona)
 
     save_message(update.effective_user.id, "user", text)
     save_message(update.effective_user.id, "assistant", reply if isinstance(reply, str) else str(reply))
